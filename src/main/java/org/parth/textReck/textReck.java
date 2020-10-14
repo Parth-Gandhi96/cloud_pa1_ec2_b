@@ -14,13 +14,29 @@ import com.amazonaws.services.rekognition.model.S3Object;
 import com.amazonaws.services.rekognition.model.DetectTextRequest;
 import com.amazonaws.services.rekognition.model.DetectTextResult;
 import com.amazonaws.services.rekognition.model.TextDetection;
-import java.util.List;
+import java.util.*;
 import java.util.Map.Entry;
+import java.io.*;
 
 public class textReck 
 {
-    public static void callDetection(String photo, String bucket){
-	    photo += ".jpg";
+    	public static void storeInFile(List<String> data){
+		try {
+      			FileWriter myWriter = new FileWriter("filename.txt");
+      			String toStore = "";
+			for(String d:data)
+				toStore = (toStore + d + "\n");
+			myWriter.write(toStore);
+      			myWriter.close();
+    		} catch (IOException e) {
+      			System.out.println("An error occurred while storing the file.");
+      			e.printStackTrace();
+    		}
+	}
+	public static String callDetection(String photo, String bucket){
+	    String pn = photo;
+		photo += ".jpg";
+	    String ans = "";
 		AmazonRekognition rekognitionClient = AmazonRekognitionClientBuilder.defaultClient();
 		    DetectTextRequest request = new DetectTextRequest()
 			      .withImage(new Image()
@@ -35,7 +51,8 @@ public class textReck
                  for (TextDetection text: textDetections) {
 			 System.out.print(photo + " " );
                          System.out.print(text.getDetectedText());
-                         //System.out.println("Confidence: " + text.getConfidence().toString());
+                         ans = pn+" "+text.getDetectedText();
+			 //System.out.println("Confidence: " + text.getConfidence().toString());
                          //System.out.println("Id : " + text.getId());
                          //System.out.println("Parent Id: " + text.getParentId());
                          //System.out.println("Type: " + text.getType());
@@ -45,43 +62,46 @@ public class textReck
                 } catch(AmazonRekognitionException e) {
                  e.printStackTrace();
               }	    
+	      return ans;
     }
     public static void main( String[] args )
     {
 	    AmazonRekognition rekognitionClient = AmazonRekognitionClientBuilder.defaultClient();
 	      String bucket = "njit-cs-643";
-	      String myQueueUrl = "https://sqs.us-east-1.amazonaws.com/700559207820/cloudpro1";
-		final AmazonSQS sqs = AmazonSQSClientBuilder.defaultClient();
-	        final ReceiveMessageRequest receiveMessageRequest =
+	      String myQueueUrl = "https://sqs.us-east-1.amazonaws.com/728930872376/pa1.fifo";
+		AmazonSQS sqs = AmazonSQSClientBuilder.defaultClient();
+	        ReceiveMessageRequest receiveMessageRequest =
                     new ReceiveMessageRequest(myQueueUrl).withMaxNumberOfMessages(10);
 		    // Uncomment the following to provide the ReceiveRequestDeduplicationId
 		    // receiveMessageRequest.setReceiveRequestAttemptId("1");
 		
-		while(true){
-			final List<Message> messages = sqs.receiveMessage(receiveMessageRequest)
+		List<String> answer = new ArrayList<String>();
+		boolean flag = true;
+		while(flag){
+			List<Message> messages = sqs.receiveMessage(receiveMessageRequest)
 				    .getMessages();
-			int flag = 0;
-			for (final Message message : messages) {
-				/*System.out.println("Message");
+			
+			for (Message message : messages) {
+				System.out.println("Message");
 				System.out.println("  MessageId:     "
 					+ message.getMessageId());
 				System.out.println("  Body:          "
-					+ message.getBody());*/
-				boolean temp = false;
-				if(message.getBody().equals("-1")){
-					//System.out.println("-1 came in the queue, all messages in queue are processed!");
+					+ message.getBody());
+			
+				if(message.getBody().matches("-1")){
+					System.out.println("-1 came in the queue, all messages in queue are processed!");
 					sqs.deleteMessage(myQueueUrl, message.getReceiptHandle());
-					flag += 1;
-					temp = true;
-					//break;
+					flag = false;
+					break;
 				}
-				if (!temp){
-					callDetection(message.getBody(), bucket);
+			
+					String temp = callDetection(message.getBody(), bucket);
+					System.out.println("After text detection:"+temp);
 					sqs.deleteMessage(myQueueUrl, message.getReceiptHandle());
-				}
-			}
-			if(flag == 3)
-				break;	
+				answer.add(temp);
+			}	
 		}
+		System.out.println(answer.size());
+		storeInFile(answer);
     }
 }
